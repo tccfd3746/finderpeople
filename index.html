@@ -62,7 +62,7 @@
                 </label>
                 <textarea id="barkListInput" rows="2" placeholder="每行一個 Bark Key&#10;例如：&#10;xABC12345&#10;yXYZ67890"
                     class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 font-mono leading-relaxed"></textarea>
-                <p class="text-[10px] text-slate-400">💡 已開啟 Bark 持續電話響鈴模式，收到通知會像電話來電一樣持續爆音大響！</p>
+                <p class="text-[10px] text-slate-400">💡 隊員安裝 Bark App 並提供 Key，可實現 0 秒延遲與穿透靜音 100% 強制大響！</p>
             </div>
 
             <!-- LINE Token 設定 -->
@@ -188,7 +188,7 @@
                 <!-- 通報結果狀態提示條 -->
                 <div id="sendStatusStatusBox" class="bg-slate-800 border border-slate-700 rounded-xl p-3 text-xs space-y-1.5">
                     <div class="flex items-center justify-between">
-                        <span class="text-indigo-400 font-bold">🍎 Bark 0 延遲持續爆音：</span>
+                        <span class="text-indigo-400 font-bold">🍎 Bark 0 延遲爆音推播：</span>
                         <span id="statusBarkText" class="font-bold text-amber-400">處理中...</span>
                     </div>
                     <div class="flex items-center justify-between">
@@ -511,9 +511,9 @@
             statusLineText.innerText = '發送中...';
             statusEmailText.innerText = '背景傳送中...';
 
-            // 1. ⚡ 呼叫 Bark API 發送 iOS 0 延遲 Critical Alert + 電話持續響鈴 (call=1)
+            // 1. ⚡ 呼叫 Bark API 發送 iOS 0 延遲 Critical Alert 穿透靜音爆音
             const barkSent = await sendBarkPushNotifications(commander, type, address, notes, currentShareUrl);
-            statusBarkText.innerText = barkSent ? '✅ 已成功 0 延遲持續爆音' : 'ℹ️ 未設定 Bark Key';
+            statusBarkText.innerText = barkSent ? '✅ 已成功 0 延遲爆音推播' : 'ℹ️ 未設定 Bark Key';
             statusBarkText.className = barkSent ? 'font-bold text-indigo-400' : 'font-bold text-slate-400';
 
             // 2. 呼叫 LINE API 直發廣播
@@ -534,10 +534,9 @@
             dispatchBtn.disabled = false;
             dispatchBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i><span>即刻發布派遣與多軌廣播</span>';
 
-            alert(`🚨 派遣任務發布完畢！\n發布指揮官：${commander}\n\n1. Bark 0延遲持續爆音：${barkSent ? '成功發送 (電話模式)' : '未設定'}\n2. LINE 官方廣播：${directLineSent ? '成功' : '未完成'}\n3. 背景爆音信件：${backgroundEmailSent ? '成功發送' : '未設定'}`);
+            alert(`🚨 派遣任務發布完畢！\n發布指揮官：${commander}\n\n1. Bark 0延遲爆音：${barkSent ? '成功發送' : '未設定'}\n2. LINE 官方廣播：${directLineSent ? '成功' : '未完成'}\n3. 背景爆音信件：${backgroundEmailSent ? '成功發送' : '未設定'}`);
         }
-
-        // 🍎 Bark API 背景 0 延遲 + 持續響鈴 (call=1) 直推功能
+        // 🍎 Bark API 背景 0 延遲 + 持續爆音響鈴 (call=1) 直推功能
         async function sendBarkPushNotifications(commander, type, address, notes, landingUrl) {
             const rawList = barkList || localStorage.getItem('team_bark_list') || '';
             const keys = rawList.split(/[\n,]+/).map(k => k.trim()).filter(k => k.length > 0);
@@ -553,7 +552,7 @@
                         sound: "alarm",
                         level: "critical", // 穿透靜音/勿擾模式
                         volume: 10,       // 100% 最高音量
-                        call: "1",        // 📞 開啟電話模式（持續響鈴大響，直到隊員解鎖點開通知）
+                        call: "1",        // 📞 電話模式（iPhone 收到時自動持續爆音響鈴，直到點擊通知）
                         url: landingUrl,   // 點擊直達導航頁面
                         group: "義消召集"
                     };
