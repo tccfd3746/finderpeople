@@ -716,15 +716,23 @@
             localStorage.setItem('volunteer_name', name);
             const timeStr = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
 
-            const item = { name, status, time: timeStr };
+            const item = { name, status, time: timeStr, timestamp: Date.now() };
 
             if (db) {
-                db.ref('responses').push(item);
+                // 帶入寫入回调，確保數據 100% 寫入雲端或啟動備援
+                db.ref('responses').push(item, (error) => {
+                    if (error) {
+                        console.error('Firebase 雲端寫入失敗:', error);
+                        saveLocalResponse(item);
+                        alert(`⚠️ 雲端連線受限，已儲存至本地備份：【${status}】`);
+                    } else {
+                        alert(`✅ 已成功同步雲端報到：【${status}】\n感謝您的支援！`);
+                    }
+                });
             } else {
                 saveLocalResponse(item);
+                alert(`✅ 已成功回覆：【${status}】\n感謝您的支援！`);
             }
-
-            alert(`✅ 已成功回覆：【${status}】\n感謝您的支援！`);
         }
 
         function speakTargetInfo() {
@@ -754,11 +762,29 @@
         }
 
         function listenRealtimeResponses() {
+            const statusBadge = document.getElementById('lastUpdatedTime');
+
             if (!db) {
+                if (statusBadge) statusBadge.innerText = '🟡 本地單機模式';
                 renderResponses(getLocalResponses());
                 return;
             }
 
+            // 1. 雙向即時監聽最新派遣任務狀態
+            db.ref('latestDispatch').on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    if (data.type) document.getElementById('displayType').innerText = data.type;
+                    if (data.commander) document.getElementById('displayCommander').innerText = '指揮官：' + data.commander;
+                    if (data.address) {
+                        document.getElementById('displayAddress').innerText = data.address;
+                        document.getElementById('navBtn').href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.address)}`;
+                    }
+                    if (data.notes) document.getElementById('displayNotes').innerText = data.notes;
+                }
+            });
+
+            // 2. 雙向即時監聽義消報到回應 (含 Error 處理)
             db.ref('responses').on('value', (snapshot) => {
                 const data = snapshot.val();
                 const list = [];
@@ -766,6 +792,10 @@
                     Object.values(data).forEach(item => list.push(item));
                 }
                 renderResponses(list);
+            }, (error) => {
+                console.warn('Firebase 讀取受限，切換至本地模式:', error);
+                if (statusBadge) statusBadge.innerText = '🟡 雲端連線受限';
+                renderResponses(getLocalResponses());
             });
         }
 
@@ -782,7 +812,11 @@
             }
 
             container.innerHTML = '';
-            list.reverse().forEach(item => {
+            
+            // 安全複製陣列後反轉，避免直接修改原陣列導致排列錯亂
+            const sortedList = [...list].reverse();
+            
+            sortedList.forEach(item => {
                 let badgeClass = 'bg-slate-700 text-slate-300';
                 if (item.status === '即刻前往') { going++; badgeClass = 'bg-emerald-900/80 text-emerald-300 border border-emerald-600'; }
                 else if (item.status === '稍後到達') { later++; badgeClass = 'bg-amber-900/80 text-amber-300 border border-amber-600'; }
@@ -803,7 +837,7 @@
             document.getElementById('countGoing').innerText = going;
             document.getElementById('countLater').innerText = later;
             document.getElementById('countCannot').innerText = cannot;
-            document.getElementById('lastUpdatedTime').innerText = '更新於 ' + new Date().toLocaleTimeString();
+            document.getElementById('lastUpdatedTime').innerText = '🟢 雲端同步 ' + new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
 
         function saveLocalResponse(item) {
