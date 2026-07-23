@@ -57,12 +57,25 @@
             <!-- 🍎 Bark 0延遲爆音推播設定 (iPhone 最強黑科技) -->
             <div class="bg-slate-900/80 p-3 rounded-lg border border-indigo-500/50 space-y-2">
                 <label class="block text-xs font-bold text-indigo-400 flex items-center justify-between">
-                    <span><i class="fa-solid fa-bell mr-1"></i> iPhone Bark 0 延遲爆音 Key 名單</span>
+                    <span><i class="fa-solid fa-bell mr-1"></i> iPhone Bark 0 延遲爆音 API 與 Key 設定</span>
                     <span class="text-[10px] bg-indigo-900/80 text-indigo-200 px-1.5 py-0.5 rounded">0 延遲穿透靜音</span>
                 </label>
-                <textarea id="barkListInput" rows="2" placeholder="每行一個 Bark Key&#10;例如：&#10;xABC12345&#10;yXYZ67890"
-                    class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 font-mono leading-relaxed"></textarea>
-                <p class="text-[10px] text-slate-400">💡 隊員安裝 Bark App 並提供 Key，可實現 0 秒延遲與穿透靜音 100% 強制大響！</p>
+                <div>
+                    <span class="text-[11px] text-slate-400">Bark 伺服器 API 網址 (預設免改)：</span>
+                    <input type="text" id="barkServerInput" value="https://api.day.app" placeholder="https://api.day.app"
+                        class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 font-mono mt-0.5">
+                </div>
+                <div>
+                    <span class="text-[11px] text-slate-400">隊員 Bark Key 名單 (每行一個)：</span>
+                    <textarea id="barkListInput" rows="2" placeholder="每行一個 Bark Key&#10;例如：&#10;xABC12345&#10;yXYZ67890"
+                        class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 font-mono leading-relaxed mt-0.5"></textarea>
+                </div>
+                <div class="flex justify-between items-center pt-1 border-t border-slate-800">
+                    <p class="text-[10px] text-slate-400">💡 收到通知會像電話來電一樣持續爆音大響！</p>
+                    <button type="button" onclick="testBarkNotification()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-2.5 py-1 rounded text-[11px] shrink-0 shadow">
+                        <i class="fa-solid fa-paper-plane mr-1"></i> 測試 Bark 爆音
+                    </button>
+                </div>
             </div>
 
             <!-- LINE Token 設定 -->
@@ -99,12 +112,19 @@
             </div>
 
             <!-- 隊員 Email 名單設定 -->
-            <div class="border-t border-slate-700 pt-3">
-                <label class="block text-xs font-bold text-slate-300 mb-1 flex items-center">
-                    <i class="fa-envelope text-blue-400 mr-1.5"></i> 隊員 Email 名單
+            <div class="border-t border-slate-700 pt-3 space-y-2">
+                <label class="block text-xs font-bold text-slate-300 mb-1 flex items-center justify-between">
+                    <span class="flex items-center"><i class="fa-envelope text-blue-400 mr-1.5"></i> 隊員 Email 名單</span>
+                    <span class="text-[10px] bg-blue-900/80 text-blue-200 px-1.5 py-0.5 rounded">背景發信</span>
                 </label>
-                <textarea id="emailListInput" rows="2" placeholder="每行一個 Email，或用逗號分隔"
+                <textarea id="emailListInput" rows="2" placeholder="每行一個 Email，或用逗號分隔&#10;例如：&#10;member1@icloud.com&#10;member2@gmail.com"
                     class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 font-mono leading-relaxed"></textarea>
+                <div class="flex justify-between items-center pt-1">
+                    <p class="text-[10px] text-slate-400">💡 建議隊員優先使用 @icloud.com 信箱</p>
+                    <button type="button" onclick="testEmailNotification()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-2.5 py-1 rounded text-[11px] shrink-0 shadow">
+                        <i class="fa-solid fa-paper-plane mr-1"></i> 測試 Email 發送
+                    </button>
+                </div>
             </div>
 
             <div class="flex space-x-2 pt-2">
@@ -119,13 +139,38 @@
         <!-- ==================== View 1: 指揮官發布控制台 ==================== -->
         <section id="commanderView" class="space-y-4">
             <div class="bg-slate-800 rounded-xl p-5 border border-slate-700 shadow-xl">
-                <div class="flex justify-between items-center mb-4">
+                <div class="flex justify-between items-center mb-3">
                     <h2 class="text-base font-bold text-slate-200 flex items-center">
                         <i class="fa-solid fa-tower-broadcast text-red-500 mr-2"></i> 發布派遣任務
                     </h2>
                     <span class="text-xs bg-emerald-950 text-emerald-400 border border-emerald-700 px-2 py-0.5 rounded-full">
                         <i class="fa-solid fa-bolt mr-1"></i> 多軌背景通報就緒
                     </span>
+                </div>
+
+                <!-- 🍎 Bark 與 📧 Email 通報就緒狀態快捷卡片網格 -->
+                <div class="grid grid-cols-1 gap-2 mb-4">
+                    <!-- 🍎 Bark 爆音推播狀態卡片 -->
+                    <div class="bg-indigo-950/60 border border-indigo-700/60 rounded-lg p-2.5 flex items-center justify-between text-xs">
+                        <div class="flex items-center space-x-2 text-indigo-300 font-bold">
+                            <i class="fa-solid fa-bell text-indigo-400 text-sm"></i>
+                            <span>🍎 iPhone Bark 爆音：<span id="barkCountBadge" class="text-yellow-300 font-mono font-black text-sm">0</span> 人就緒</span>
+                        </div>
+                        <button type="button" onclick="toggleSettingsModal(true)" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-2.5 py-1 rounded-md transition text-[11px] shadow">
+                            ⚙️ 設定 / 測試
+                        </button>
+                    </div>
+
+                    <!-- 📧 Email 背景發信狀態卡片 -->
+                    <div class="bg-blue-950/60 border border-blue-700/60 rounded-lg p-2.5 flex items-center justify-between text-xs">
+                        <div class="flex items-center space-x-2 text-blue-300 font-bold">
+                            <i class="fa-solid fa-envelope text-blue-400 text-sm"></i>
+                            <span>📧 隊員 Email 收件：<span id="emailCountBadge" class="text-yellow-300 font-mono font-black text-sm">0</span> 人就緒</span>
+                        </div>
+                        <button type="button" onclick="toggleSettingsModal(true)" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-2.5 py-1 rounded-md transition text-[11px] shadow">
+                            ⚙️ 設定收件人
+                        </button>
+                    </div>
                 </div>
 
                 <form id="dispatchForm" class="space-y-4" onsubmit="handleDispatch(event)">
@@ -357,6 +402,7 @@
         let lineToken = localStorage.getItem('line_channel_access_token') || DEFAULT_TOKEN;
         let emailList = localStorage.getItem('team_email_list') || 'member1@icloud.com, member2@gmail.com';
         let barkList = localStorage.getItem('team_bark_list') || '';
+        let barkServer = localStorage.getItem('bark_server_url') || 'https://api.day.app';
         
         let emailjsPublicKey = localStorage.getItem('emailjs_public_key') || 'AHZz1ShsmSUtjv0Gf';
         let emailjsServiceId = localStorage.getItem('emailjs_service_id') || 'service_bkkc1su';
@@ -367,6 +413,8 @@
             loadVolunteerName();
             listenRealtimeResponses();
             loadSystemSettingsUI();
+            updateBarkCountBadge();
+            updateEmailCountBadge();
         });
 
         function switchTab() {
@@ -403,6 +451,7 @@
             const tokenInput = document.getElementById('lineTokenInput');
             const emailInput = document.getElementById('emailListInput');
             const barkInput = document.getElementById('barkListInput');
+            const barkServerInput = document.getElementById('barkServerInput');
             const pkInput = document.getElementById('emailjsPublicKeyInput');
             const sidInput = document.getElementById('emailjsServiceIdInput');
             const tidInput = document.getElementById('emailjsTemplateIdInput');
@@ -410,21 +459,17 @@
             if (tokenInput) tokenInput.value = lineToken;
             if (emailInput) emailInput.value = emailList;
             if (barkInput) barkInput.value = barkList;
+            if (barkServerInput) barkServerInput.value = barkServer;
             if (pkInput) pkInput.value = emailjsPublicKey;
             if (sidInput) sidInput.value = emailjsServiceId;
             if (tidInput) tidInput.value = emailjsTemplateId;
-        }
-
-        function toggleSettingsModal(show) {
-            const modal = document.getElementById('settingsModal');
-            if (show) modal.classList.remove('hidden');
-            else modal.classList.add('hidden');
         }
 
         function saveSystemSettings() {
             const tokenVal = document.getElementById('lineTokenInput').value.trim();
             const emailVal = document.getElementById('emailListInput').value.trim();
             const barkVal = document.getElementById('barkListInput').value.trim();
+            const barkServerVal = document.getElementById('barkServerInput').value.trim() || 'https://api.day.app';
             const pkVal = document.getElementById('emailjsPublicKeyInput').value.trim();
             const sidVal = document.getElementById('emailjsServiceIdInput').value.trim();
             const tidVal = document.getElementById('emailjsTemplateIdInput').value.trim();
@@ -432,6 +477,7 @@
             localStorage.setItem('line_channel_access_token', tokenVal);
             localStorage.setItem('team_email_list', emailVal);
             localStorage.setItem('team_bark_list', barkVal);
+            localStorage.setItem('bark_server_url', barkServerVal);
             localStorage.setItem('emailjs_public_key', pkVal);
             localStorage.setItem('emailjs_service_id', sidVal);
             localStorage.setItem('emailjs_template_id', tidVal);
@@ -439,34 +485,60 @@
             lineToken = tokenVal;
             emailList = emailVal;
             barkList = barkVal;
+            barkServer = barkServerVal;
             emailjsPublicKey = pkVal;
             emailjsServiceId = sidVal;
             emailjsTemplateId = tidVal;
 
-            alert('✅ 系統參數、Bark Key 與 Email 寄件設定已儲存！');
+            updateBarkCountBadge();
+            updateEmailCountBadge();
+            alert('✅ 系統參數、Bark Key 與 Email 收件人名單已儲存！');
             toggleSettingsModal(false);
         }
 
-        function checkUrlParams() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const addr = urlParams.get('addr');
-            const type = urlParams.get('type');
-            const commander = urlParams.get('commander');
-            const notes = urlParams.get('notes');
+        function updateBarkCountBadge() {
+            const rawList = barkList || localStorage.getItem('team_bark_list') || '';
+            const count = rawList.split(/[\n,]+/).map(k => k.trim()).filter(k => k.length > 0).length;
+            const badge = document.getElementById('barkCountBadge');
+            if (badge) badge.innerText = count;
+        }
 
-            if (addr || type || commander) {
-                currentMode = 'volunteer';
-                document.getElementById('commanderView').classList.add('hidden');
-                document.getElementById('volunteerView').classList.remove('hidden');
-                document.getElementById('modeToggleBtn').innerHTML = '<i class="fa-solid fa-tower-broadcast mr-1.5"></i> 切換指揮官視圖';
+        function updateEmailCountBadge() {
+            const rawList = emailList || localStorage.getItem('team_email_list') || '';
+            const count = rawList.split(/[\n,]+/).map(e => e.trim()).filter(e => e.length > 0).length;
+            const badge = document.getElementById('emailCountBadge');
+            if (badge) badge.innerText = count;
+        }
 
-                if (type) document.getElementById('displayType').innerText = type;
-                if (commander) document.getElementById('displayCommander').innerText = '指揮官：' + commander;
-                if (addr) {
-                    document.getElementById('displayAddress').innerText = addr;
-                    document.getElementById('navBtn').href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`;
-                }
-                if (notes) document.getElementById('displayNotes').innerText = notes;
+        async function testBarkNotification() {
+            const rawList = document.getElementById('barkListInput').value.trim();
+            if (!rawList) {
+                alert('⚠️ 請先填入至少一個 Bark Key 再進行測試！');
+                return;
+            }
+            saveSystemSettings();
+            
+            const sent = await sendBarkPushNotifications("測試指揮官", "📢 0延遲爆音測試", "臺中市烏日區高鐵東一路26號", "這是一封 Bark 爆音推播測試，若聽到響鈴代表設定成功！", window.location.href);
+            if (sent) {
+                alert('🔔 測試推播已發送！請檢查 iPhone 是否收到持續響鈴警報。');
+            } else {
+                alert('❌ 發送失敗，請檢查 Bark Key 是否輸入正確或網路連線。');
+            }
+        }
+
+        async function testEmailNotification() {
+            const rawList = document.getElementById('emailListInput').value.trim();
+            if (!rawList) {
+                alert('⚠️ 請先填入至少一個隊員 Email 收件人再進行測試！');
+                return;
+            }
+            saveSystemSettings();
+
+            const sent = await sendBackgroundEmails("測試指揮官", "📢 測試通報", "臺中市烏日區高鐵東一路26號", "這是一封 Email 自動發信測試，收到此信代表 EmailJS 設定與收件人名單正常！", window.location.href);
+            if (sent) {
+                alert('📧 測試 Email 已成功發出！請至收件匣（或垃圾郵件匣）確認收信。');
+            } else {
+                alert('❌ 發送失敗！請檢查 EmailJS 的 Service ID / Template ID / Public Key 是否設定正確。');
             }
         }
 
@@ -535,11 +607,11 @@
             dispatchBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i><span>即刻發布派遣與多軌廣播</span>';
 
             alert(`🚨 派遣任務發布完畢！\n發布指揮官：${commander}\n\n1. Bark 0延遲爆音：${barkSent ? '成功發送' : '未設定'}\n2. LINE 官方廣播：${directLineSent ? '成功' : '未完成'}\n3. 背景爆音信件：${backgroundEmailSent ? '成功發送' : '未設定'}`);
-        }
-        // 🍎 Bark API 背景 0 延遲 + 持續爆音響鈴 (call=1) 直推功能
+        // 🍎 Bark API 背景 0 延遲 + 持續響鈴 (call=1) 直推功能
         async function sendBarkPushNotifications(commander, type, address, notes, landingUrl) {
             const rawList = barkList || localStorage.getItem('team_bark_list') || '';
             const keys = rawList.split(/[\n,]+/).map(k => k.trim()).filter(k => k.length > 0);
+            const serverUrl = (barkServer || localStorage.getItem('bark_server_url') || 'https://api.day.app').replace(/\/+$/, '');
 
             if (!keys.length) return false;
 
@@ -552,12 +624,12 @@
                         sound: "alarm",
                         level: "critical", // 穿透靜音/勿擾模式
                         volume: 10,       // 100% 最高音量
-                        call: "1",        // 📞 電話模式（iPhone 收到時自動持續爆音響鈴，直到點擊通知）
+                        call: "1",        // 📞 開啟電話模式（持續響鈴大響，直到隊員解鎖點開通知）
                         url: landingUrl,   // 點擊直達導航頁面
                         group: "義消召集"
                     };
 
-                    const response = await fetch('https://api.day.app/push', {
+                    const response = await fetch(`${serverUrl}/push`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
