@@ -1,0 +1,127 @@
+// ==================== 系統設定區 ====================
+// 1. 貼上您的 LINE Channel Access Token (從 LINE Developers 控制台取得)
+var LINE_TOKEN = "Yfg3HAxAHkmSH4xU/p8y+fcDb4PLi/WQ+0mJgIit93uOsxWOltH8+Az1bmJwVB5ip5FWnhv/5YZfl8x6dF12/0sdhl0sG5p5Bf1wStjSDwZweuGwqI6jiZY/oBqXXUSyR2zwJTTvUg7OFSAvJlummQdB04t89/1O/w1cDnyilFU=";
+
+// 2. 4 位指揮官 PIN 碼與稱謂設定
+var COMMANDERS = {
+  "1111": "分隊長 - 許佳莉",
+  "2222": "小隊長 - 鄭瑛校",
+  "3333": "小隊長 - 葉志學",
+  "4444": "小隊長 - 蕭勝文"
+};
+// ================================================
+
+/**
+ * 接收並處理來自前端 Web App 的 POST 請求
+ * 改用 getActiveSpreadsheet() 避免觸發高敏感權限阻擋 (This app is blocked)
+ */
+function doPost(e) {
+  try {
+    // 解析前端傳入的 JSON 資料
+    var data = JSON.parse(e.postData.contents);
+    
+    // 取得當前試算表（僅需要本試算表存取權限，安全性最高）
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+      
+    // 動作 A：義消回覆報到狀態
+    if (data.action === 'respond') {
+      sheet.appendRow([new Date(), "義消回覆", data.name, data.status, data.address]);
+      return ContentService.createTextOutput(JSON.stringify({
+        result: "success"
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+      
+    // 動作 B：指揮官發布派遣廣播
+    if (data.action === 'dispatch') {
+      var pin = data.pin;
+      
+      // 驗證 PIN 碼授權
+      if (!COMMANDERS[pin]) {
+        return ContentService.createTextOutput(JSON.stringify({
+          result: "error", 
+          message: "PIN 碼驗證失敗！"
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+        
+      var commanderName = COMMANDERS[pin];
+      
+      // 寫入 Google 試算表歷史紀錄
+      sheet.appendRow([new Date(), "指揮官派遣", commanderName, data.type, data.address, data.notes]);
+        
+      // 呼叫 LINE Messaging API 群發廣播訊息
+      sendLineBroadcast(commanderName, data.type, data.address, data.notes, data.landingUrl);
+        
+      return ContentService.createTextOutput(JSON.stringify({
+        result: "success", 
+        commander: commanderName
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      result: "error", 
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * 發送 LINE 官方帳號廣播訊息 (Flex Message)
+ */
+function sendLineBroadcast(commander, type, address, notes, landingUrl) {
+  var payload = {
+    "messages": [{
+      "type": "flex",
+      "altText": "🚨 緊急支援通報：" + address,
+      "contents": {
+        "type": "bubble",
+        "header": {
+          "type": "box",
+          "layout": "vertical",
+          "backgroundColor": "#DC2626",
+          "contents": [
+            { "type": "text", "text": "🚨 " + type, "color": "#FFFFFF", "weight": "bold", "size": "md" },
+            { "type": "text", "text": "發布指揮官：" + commander, "color": "#FEF08A", "size": "xs", "margin": "xs" }
+          ]
+        },
+        "body": {
+          "type": "box",
+          "layout": "vertical",
+          "contents": [
+            { "type": "text", "text": "📍 救援地點：", "size": "xs", "color": "#888888" },
+            { "type": "text", "text": address, "weight": "bold", "size": "sm", "wrap": true, "color": "#111111" },
+            { "type": "text", "text": "📝 現場說明：", "size": "xs", "color": "#888888", "margin": "md" },
+            { "type": "text", "text": notes, "size": "xs", "color": "#444444", "wrap": true },
+            {
+              "type": "button",
+              "style": "primary",
+              "color": "#DC2626",
+              "margin": "lg",
+              "action": {
+                "type": "uri",
+                "label": "🔊 聽取語音朗讀與導航",
+                "uri": landingUrl
+              }
+            }
+          ]
+        }
+      }
+    }]
+  };
+    
+  UrlFetchApp.fetch('https://api.line.me/v2/bot/message/broadcast', {
+    'headers': {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + LINE_TOKEN
+    },
+    'method': 'post',
+    'payload': JSON.stringify(payload)
+  });
+}
+
+/**
+ * 測試授權用函式 (首次設置時，可以在 GAS 編輯器選擇執行此函式進行權限驗證)
+ */
+function testAuth() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  Logger.log("試算表權限驗證成功，工作表名稱：" + sheet.getName());
+}
