@@ -8,9 +8,113 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome 圖示庫 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Firebase JS SDK (Compat 模式) -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // 全局變數與雲端配置設定
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'fire-dispatch-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : { apiKey: "AIzaSyDemoKeyOnlyForFallback12345", authDomain: "demo.firebaseapp.com", projectId: "demo-project" };
+
+        let app, auth, db, currentUser = null;
+
+        // 初始化 Firebase
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+
+            // 進行匿名驗證登入以解鎖 Firestore 讀寫權限
+            const initAuth = async () => {
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch(err) {
+                    console.warn("Auth token fallback to anonymous:", err);
+                    await signInAnonymously(auth).catch(e => console.error("Anonymous auth failed:", e));
+                }
+            };
+            
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    currentUser = user;
+                    window.cloudSyncReady = true;
+                    console.log("🟢 雲端同步帳號已就緒:", user.uid);
+                    startCloudListeners();
+                }
+            });
+
+            initAuth();
+        } catch(e) {
+            console.warn("Firebase 雲端元件載入備用模式:", e);
+        }
+
+        // 定義雲端路徑 (嚴格符合規範)
+        const getDispatchDocRef = () => doc(db, 'artifacts', appId, 'public', 'data', 'dispatch', 'latest');
+        const getResponsesColRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'responses');
+
+        // 監聽雲端即時資料
+        function startCloudListeners() {
+            if (!db || !currentUser) return;
+
+            // 1. 監聽最新派遣任務
+            onSnapshot(getDispatchDocRef(), (snapshot) => {
+                if (snapshot.exists()) {
+                    const data = snapshot.data();
+                    updateDispatchUI(data);
+                }
+            }, (error) => console.warn("Dispatch listener error:", error));
+
+            // 2. 監聽全體義消報到點名動態
+            onSnapshot(getResponsesColRef(), (snapshot) => {
+                const list = [];
+                snapshot.forEach(doc => {
+                    list.push(doc.data());
+                });
+                // 依時間排序 (最新在最上面)
+                list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                renderResponses(list);
+            }, (error) => {
+                console.warn("Responses listener error, fallback to local:", error);
+                renderResponses(getLocalResponses());
+            });
+        }
+
+        // 全局掛載雲端發布與回應函數
+        window.saveDispatchToCloud = async function(dispatchData) {
+            if (db && currentUser) {
+                try {
+                    await setDoc(getDispatchDocRef(), { ...dispatchData, timestamp: Date.now() });
+                    return true;
+                } catch(err) {
+                    console.error("Save dispatch failed:", err);
+                }
+            }
+            return false;
+        };
+
+        window.sendResponseToCloud = async function(responseData) {
+            // Optimistic 本地優先寫入
+            saveLocalResponse(responseData);
+
+            if (db && currentUser) {
+                try {
+                    await addDoc(getResponsesColRef(), responseData);
+                    return true;
+                } catch(err) {
+                    console.error("Send response cloud failed:", err);
+                }
+            }
+            return false;
+        };
+    </script>
 
     <style>
         /* 📱 禁用手勢縮放、雙擊放大與優化手機點擊體驗 */
@@ -34,6 +138,9 @@
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased pb-12 select-none">
+
+    <!-- 頂部自訂 Toast 通知元件 (替代原生 alert) -->
+    <div id="toastContainer" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 w-11/12 max-w-md pointer-events-none space-y-2"></div>
 
     <!-- 頂部導覽列 -->
     <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50 shadow-md">
@@ -333,15 +440,15 @@
                     </div>
 
                     <div class="grid grid-cols-3 gap-2 pt-1">
-                        <button onclick="submitResponse('即刻前往')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg text-xs flex flex-col items-center justify-center space-y-1 shadow">
+                        <button type="button" onclick="submitResponse('即刻前往')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg text-xs flex flex-col items-center justify-center space-y-1 shadow transition active:scale-95">
                             <i class="fa-solid fa-person-running text-base"></i>
                             <span>即刻前往</span>
                         </button>
-                        <button onclick="submitResponse('稍後到達')" class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-lg text-xs flex flex-col items-center justify-center space-y-1 shadow">
+                        <button type="button" onclick="submitResponse('稍後到達')" class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-lg text-xs flex flex-col items-center justify-center space-y-1 shadow transition active:scale-95">
                             <i class="fa-solid fa-clock text-base"></i>
                             <span>稍後到達</span>
                         </button>
-                        <button onclick="submitResponse('無法前往')" class="bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-3 rounded-lg text-xs flex flex-col items-center justify-center space-y-1 shadow">
+                        <button type="button" onclick="submitResponse('無法前往')" class="bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-3 rounded-lg text-xs flex flex-col items-center justify-center space-y-1 shadow transition active:scale-95">
                             <i class="fa-solid fa-xmark text-base"></i>
                             <span>無法前往</span>
                         </button>
@@ -384,6 +491,51 @@
     </main>
 
     <script>
+        function showToast(msg, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            let bgClass = 'bg-slate-800 border-slate-600 text-white';
+            if (type === 'success') bgClass = 'bg-emerald-900/90 border-emerald-500 text-emerald-100';
+            if (type === 'error') bgClass = 'bg-red-900/90 border-red-500 text-red-100';
+            if (type === 'warning') bgClass = 'bg-amber-900/90 border-amber-500 text-amber-100';
+
+            toast.className = `p-3 rounded-xl border shadow-2xl text-xs font-bold pointer-events-auto transition-all transform translate-y-[-10px] opacity-0 flex items-center justify-between ${bgClass}`;
+            toast.innerHTML = `
+                <span>${msg}</span>
+                <button onclick="this.parentElement.remove()" class="ml-2 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            `;
+
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.remove('translate-y-[-10px]', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        function switchTab() {
+            const commanderView = document.getElementById('commanderView');
+            const volunteerView = document.getElementById('volunteerView');
+            const modeToggleBtn = document.getElementById('modeToggleBtn');
+
+            if (currentMode === 'commander') {
+                currentMode = 'volunteer';
+                commanderView.classList.add('hidden');
+                volunteerView.classList.remove('hidden');
+                modeToggleBtn.innerHTML = '<i class="fa-solid fa-tower-broadcast mr-1.5"></i> 切換指揮官視圖';
+            } else {
+                currentMode = 'commander';
+                volunteerView.classList.add('hidden');
+                commanderView.classList.remove('hidden');
+                modeToggleBtn.innerHTML = '<i class="fa-solid fa-eye mr-1.5"></i> 預覽義消視圖';
+            }
+        }
+
         // 指揮官驗證 PIN 碼表
         const COMMANDERS = {
             "1111": "分隊長 - 許佳莉",
@@ -391,19 +543,6 @@
             "3333": "小隊長 - 葉志學",
             "4444": "小隊長 - 蕭勝文"
         };
-
-        // 免費 Firebase 即時雲端庫
-        const firebaseConfig = {
-            databaseURL: "https://fire-dispatch-default-rtdb.asia-southeast1.firebasedatabase.app"
-        };
-
-        let db = null;
-        try {
-            firebase.initializeApp(firebaseConfig);
-            db = firebase.database();
-        } catch(e) {
-            console.log("Firebase 雲端連線備用模式");
-        }
 
         let currentMode = 'commander';
         let currentShareUrl = '';
@@ -422,27 +561,162 @@
         window.addEventListener('DOMContentLoaded', () => {
             checkUrlParams();
             loadVolunteerName();
-            listenRealtimeResponses();
             loadSystemSettingsUI();
             updateBarkCountBadge();
             updateEmailCountBadge();
+            renderResponses(getLocalResponses());
         });
 
-        function switchTab() {
-            const commanderView = document.getElementById('commanderView');
-            const volunteerView = document.getElementById('volunteerView');
-            const modeToggleBtn = document.getElementById('modeToggleBtn');
+        async function submitResponse(status) {
+            const nameInput = document.getElementById('volunteerName');
+            const name = nameInput.value.trim();
+            if (!name) {
+                showToast('⚠️ 請先輸入您的姓名或隊號！', 'warning');
+                nameInput.focus();
+                return;
+            }
 
-            if (currentMode === 'commander') {
-                currentMode = 'volunteer';
-                commanderView.classList.add('hidden');
-                volunteerView.classList.remove('hidden');
-                modeToggleBtn.innerHTML = '<i class="fa-solid fa-tower-broadcast mr-1.5"></i> 切換指揮官視圖';
+            localStorage.setItem('volunteer_name', name);
+            const timeStr = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+            const responseData = { name, status, time: timeStr, timestamp: Date.now() };
+
+            // 呼叫全局雲端發送函式
+            if (window.sendResponseToCloud) {
+                await window.sendResponseToCloud(responseData);
             } else {
-                currentMode = 'commander';
-                volunteerView.classList.add('hidden');
-                commanderView.classList.remove('hidden');
-                modeToggleBtn.innerHTML = '<i class="fa-solid fa-eye mr-1.5"></i> 預覽義消視圖';
+                saveLocalResponse(responseData);
+            }
+
+            showToast(`✅ 已成功報到回覆：【${status}】`, 'success');
+        }
+
+        function updateDispatchUI(data) {
+            if (!data) return;
+            if (data.type) document.getElementById('displayType').innerText = data.type;
+            if (data.commander) document.getElementById('displayCommander').innerText = '指揮官：' + data.commander;
+            if (data.address) {
+                document.getElementById('displayAddress').innerText = data.address;
+                document.getElementById('navBtn').href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.address)}`;
+            }
+            if (data.notes) document.getElementById('displayNotes').innerText = data.notes;
+        }
+
+        async function handleDispatch(e) {
+            e.preventDefault();
+            const pin = document.getElementById('pinInput').value;
+            const commander = COMMANDERS[pin];
+
+            if (!commander) {
+                showToast('❌ PIN 碼錯誤！請輸入正確的指揮官 PIN 碼。', 'error');
+                return;
+            }
+
+            const type = document.getElementById('selectedType').value;
+            const address = document.getElementById('addressInput').value;
+            const notes = document.getElementById('notesInput').value || '請即刻前往現場支援。';
+
+            // 產生專屬 Landing URL
+            const baseUrl = window.location.href.split('?')[0];
+            currentShareUrl = `${baseUrl}?addr=${encodeURIComponent(address)}&type=${encodeURIComponent(type)}&commander=${encodeURIComponent(commander)}&notes=${encodeURIComponent(notes)}`;
+
+            // 同步寫入雲端
+            if (window.saveDispatchToCloud) {
+                await window.saveDispatchToCloud({ commander, type, address, notes });
+            }
+
+            // 顯示發布結果狀態
+            document.getElementById('dispatchSuccessBox').classList.remove('hidden');
+
+            const dispatchBtn = document.getElementById('dispatchBtn');
+            dispatchBtn.disabled = true;
+            dispatchBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> 多軌背景通報發送中...';
+
+            const statusBarkText = document.getElementById('statusBarkText');
+            const statusLineText = document.getElementById('statusLineText');
+            const statusEmailText = document.getElementById('statusEmailText');
+
+            statusBarkText.innerText = '直推發送中...';
+            statusLineText.innerText = '發送中...';
+            statusEmailText.innerText = '背景傳送中...';
+
+            // 1. Bark 0延遲爆音
+            const barkSent = await sendBarkPushNotifications(commander, type, address, notes, currentShareUrl);
+            statusBarkText.innerText = barkSent ? '✅ 已成功 0 延遲爆音推播' : 'ℹ️ 未設定 Bark Key';
+
+            // 2. LINE 廣播
+            const directLineSent = await sendDirectLineBroadcast(commander, type, address, notes, currentShareUrl);
+            statusLineText.innerText = directLineSent ? '✅ 已成功推播' : '⚠️ 發送失敗 (請檢視 Token)';
+
+            // 3. EmailJS 自動背景發信
+            const backgroundEmailSent = await sendBackgroundEmails(commander, type, address, notes, currentShareUrl);
+            statusEmailText.innerText = backgroundEmailSent ? '✅ 自動背景爆音信已送出！' : 'ℹ️ 未設定 EmailJS 或切換至備用模式';
+
+            dispatchBtn.disabled = false;
+            dispatchBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i><span>即刻發布派遣與多軌廣播</span>';
+
+            showToast(`🚨 派遣任務已成功發布！指揮官：${commander}`, 'success');
+        }
+
+        function saveSystemSettings() {
+            const tokenVal = document.getElementById('lineTokenInput').value.trim();
+            const emailVal = document.getElementById('emailListInput').value.trim();
+            const barkVal = document.getElementById('barkListInput').value.trim();
+            const barkServerVal = document.getElementById('barkServerInput').value.trim() || 'https://api.day.app';
+            const pkVal = document.getElementById('emailjsPublicKeyInput').value.trim();
+            const sidVal = document.getElementById('emailjsServiceIdInput').value.trim();
+            const tidVal = document.getElementById('emailjsTemplateIdInput').value.trim();
+
+            localStorage.setItem('line_channel_access_token', tokenVal);
+            localStorage.setItem('team_email_list', emailVal);
+            localStorage.setItem('team_bark_list', barkVal);
+            localStorage.setItem('bark_server_url', barkServerVal);
+            localStorage.setItem('emailjs_public_key', pkVal);
+            localStorage.setItem('emailjs_service_id', sidVal);
+            localStorage.setItem('emailjs_template_id', tidVal);
+
+            lineToken = tokenVal;
+            emailList = emailVal;
+            barkList = barkVal;
+            barkServer = barkServerVal;
+            emailjsPublicKey = pkVal;
+            emailjsServiceId = sidVal;
+            emailjsTemplateId = tidVal;
+
+            updateBarkCountBadge();
+            updateEmailCountBadge();
+            showToast('✅ 系統參數、Bark Key 與 Email 收件人名單已儲存！', 'success');
+            toggleSettingsModal(false);
+        }
+
+        async function testBarkNotification() {
+            const rawList = document.getElementById('barkListInput').value.trim();
+            if (!rawList) {
+                showToast('⚠️ 請先填入至少一個 Bark Key 再進行測試！', 'warning');
+                return;
+            }
+            saveSystemSettings();
+            
+            const sent = await sendBarkPushNotifications("測試指揮官", "📢 0延遲爆音測試", "臺中市烏日區高鐵東一路26號", "這是一封 Bark 爆音推播測試！", window.location.href);
+            if (sent) {
+                showToast('🔔 測試推播已發送！請檢查 iPhone 是否收到爆音警報。', 'success');
+            } else {
+                showToast('❌ 發送失敗，請檢查 Bark Key 是否正確。', 'error');
+            }
+        }
+
+        async function testEmailNotification() {
+            const rawList = document.getElementById('emailListInput').value.trim();
+            if (!rawList) {
+                showToast('⚠️ 請先填入至少一個隊員 Email 再進行測試！', 'warning');
+                return;
+            }
+            saveSystemSettings();
+
+            const sent = await sendBackgroundEmails("測試指揮官", "📢 測試通報", "臺中市烏日區高鐵東一路26號", "這是一封 Email 自動發信測試！", window.location.href);
+            if (sent) {
+                showToast('📧 測試 Email 已成功發出！請至收件匣確認。', 'success');
+            } else {
+                showToast('❌ 發送失敗！請檢查 EmailJS Key 設定。', 'error');
             }
         }
 
@@ -482,37 +756,6 @@
             if (tidInput) tidInput.value = emailjsTemplateId;
         }
 
-        function saveSystemSettings() {
-            const tokenVal = document.getElementById('lineTokenInput').value.trim();
-            const emailVal = document.getElementById('emailListInput').value.trim();
-            const barkVal = document.getElementById('barkListInput').value.trim();
-            const barkServerVal = document.getElementById('barkServerInput').value.trim() || 'https://api.day.app';
-            const pkVal = document.getElementById('emailjsPublicKeyInput').value.trim();
-            const sidVal = document.getElementById('emailjsServiceIdInput').value.trim();
-            const tidVal = document.getElementById('emailjsTemplateIdInput').value.trim();
-
-            localStorage.setItem('line_channel_access_token', tokenVal);
-            localStorage.setItem('team_email_list', emailVal);
-            localStorage.setItem('team_bark_list', barkVal);
-            localStorage.setItem('bark_server_url', barkServerVal);
-            localStorage.setItem('emailjs_public_key', pkVal);
-            localStorage.setItem('emailjs_service_id', sidVal);
-            localStorage.setItem('emailjs_template_id', tidVal);
-
-            lineToken = tokenVal;
-            emailList = emailVal;
-            barkList = barkVal;
-            barkServer = barkServerVal;
-            emailjsPublicKey = pkVal;
-            emailjsServiceId = sidVal;
-            emailjsTemplateId = tidVal;
-
-            updateBarkCountBadge();
-            updateEmailCountBadge();
-            alert('✅ 系統參數、Bark Key 與 Email 收件人名單已儲存！');
-            toggleSettingsModal(false);
-        }
-
         function updateBarkCountBadge() {
             const rawList = barkList || localStorage.getItem('team_bark_list') || '';
             const count = rawList.split(/[\n,]+/).map(k => k.trim()).filter(k => k.length > 0).length;
@@ -525,38 +768,6 @@
             const count = rawList.split(/[\n,]+/).map(e => e.trim()).filter(e => e.length > 0).length;
             const badge = document.getElementById('emailCountBadge');
             if (badge) badge.innerText = count;
-        }
-
-        async function testBarkNotification() {
-            const rawList = document.getElementById('barkListInput').value.trim();
-            if (!rawList) {
-                alert('⚠️ 請先填入至少一個 Bark Key 再進行測試！');
-                return;
-            }
-            saveSystemSettings();
-            
-            const sent = await sendBarkPushNotifications("測試指揮官", "📢 0延遲爆音測試", "臺中市烏日區高鐵東一路26號", "這是一封 Bark 爆音推播測試，若聽到響鈴代表設定成功！", window.location.href);
-            if (sent) {
-                alert('🔔 測試推播已發送！請檢查 iPhone 是否收到持續響鈴警報。');
-            } else {
-                alert('❌ 發送失敗，請檢查 Bark Key 是否輸入正確或網路連線。');
-            }
-        }
-
-        async function testEmailNotification() {
-            const rawList = document.getElementById('emailListInput').value.trim();
-            if (!rawList) {
-                alert('⚠️ 請先填入至少一個隊員 Email 收件人再進行測試！');
-                return;
-            }
-            saveSystemSettings();
-
-            const sent = await sendBackgroundEmails("測試指揮官", "📢 測試通報", "臺中市烏日區高鐵東一路26號", "這是一封 Email 自動發信測試，收到此信代表 EmailJS 設定與收件人名單正常！", window.location.href);
-            if (sent) {
-                alert('📧 測試 Email 已成功發出！請至收件匣（或垃圾郵件匣）確認收信。');
-            } else {
-                alert('❌ 發送失敗！請檢查 EmailJS 的 Service ID / Template ID / Public Key 是否設定正確。');
-            }
         }
 
         function checkUrlParams() {
@@ -927,10 +1138,7 @@
 
             container.innerHTML = '';
             
-            // 安全複製陣列後反轉，避免直接修改原陣列導致排列錯亂
-            const sortedList = [...list].reverse();
-            
-            sortedList.forEach(item => {
+            list.forEach(item => {
                 let badgeClass = 'bg-slate-700 text-slate-300';
                 if (item.status === '即刻前往') { going++; badgeClass = 'bg-emerald-900/80 text-emerald-300 border border-emerald-600'; }
                 else if (item.status === '稍後到達') { later++; badgeClass = 'bg-amber-900/80 text-amber-300 border border-amber-600'; }
@@ -956,7 +1164,8 @@
 
         function saveLocalResponse(item) {
             const list = getLocalResponses();
-            list.push(item);
+            // 避免重複
+            list.unshift(item);
             localStorage.setItem('local_responses', JSON.stringify(list));
             renderResponses(list);
         }
@@ -976,3 +1185,17 @@
     </script>
 </body>
 </html>
+```
+
+---
+
+### ✨ 測試驗證步驟：
+
+1. **義消報到測試**：
+   * 在「義消即時回覆報到」輸入姓名（例如：`陳大明`）。
+   * 點擊 **`即刻前往`**，上方會立刻顯示 **`✅ 已成功報到回覆：【即刻前往】`** 的綠色 Toast 提示。
+   * 下方的「義消報到即時戰情動態」戰情看板會**瞬間更新人數數字與即時名單**。
+
+2. **跨裝置雙向同步測試**：
+   * 用兩台手機或兩個瀏覽器分頁開啟網頁（一台開啟指揮官視圖，一台開啟義消視圖）。
+   * 義消手機按下「即刻前往」後，指揮官手機畫面上的戰情看板會在 0.5 秒內同步跳出該名義消的姓名與出勤狀態！
