@@ -55,9 +55,9 @@
             </div>
             <div>
                 <label class="block text-xs text-slate-400 mb-1">LINE Channel Access Token (長金鑰)</label>
-                <textarea id="lineTokenInput" rows="3" placeholder="Yfg3HAxAHkmSH4xU/p8y+fcDb4PLi/WQ+0mJgIit93uOsxWOltH8+Az1bmJwVB5ip5FWnhv/5YZfl8x6dF12/0sdhl0sG5p5Bf1wStjSDwZweuGwqI6jiZY/oBqXXUSyR2zwJTTvUg7OFSAvJlummQdB04t89/1O/w1cDnyilFU="
+                <textarea id="lineTokenInput" rows="3" placeholder="貼上 LINE Channel Access Token..."
                     class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-200 focus:outline-none focus:border-red-500 font-mono"></textarea>
-                <p class="text-[11px] text-slate-400 mt-1">填入 Token 後，指揮官點擊發布時將**自動透過 LINE 官方帳號直接推播**給所有好友！</p>
+                <p class="text-[11px] text-slate-400 mt-1">已成功預設內建金鑰！指揮官點擊發布時將**自動透過 LINE 官方帳號對所有好友發出彈窗廣播**！</p>
             </div>
             <div class="flex space-x-2 pt-2">
                 <button onclick="saveLineToken()" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded-lg text-xs">儲存金鑰</button>
@@ -76,7 +76,7 @@
                         <i class="fa-solid fa-tower-broadcast text-red-500 mr-2"></i> 發布派遣任務
                     </h2>
                     <span class="text-xs bg-emerald-950 text-emerald-400 border border-emerald-700 px-2 py-0.5 rounded-full">
-                        <i class="fa-solid fa-bolt mr-1"></i> 免 GAS 免阻擋版
+                        <i class="fa-solid fa-bolt mr-1"></i> LINE 官方連線中
                     </span>
                 </div>
 
@@ -130,16 +130,16 @@
                     <!-- 發布按鈕 -->
                     <button type="submit" id="dispatchBtn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-lg shadow-lg shadow-red-900/40 transition flex items-center justify-center space-x-2 text-base">
                         <i class="fa-solid fa-paper-plane"></i>
-                        <span>即刻發布派遣與開啟廣播</span>
+                        <span>即刻發布派遣與 LINE 官方推播</span>
                     </button>
                 </form>
             </div>
 
-            <!-- 發布後的 LINE 快捷轉傳按鈕 -->
+            <!-- 發布後的 LINE 備用轉傳區塊 -->
             <div id="lineShareBox" class="hidden bg-emerald-950/80 border border-emerald-600 rounded-xl p-4 space-y-3">
                 <div class="flex items-center space-x-2 text-emerald-300 font-bold text-sm">
                     <i class="fa-brands fa-line text-xl"></i>
-                    <span>派遣資料已儲存！請分享至 LINE 群組：</span>
+                    <span>派遣訊息已發送！如需轉發至私人群組：</span>
                 </div>
                 <button onclick="shareToLine()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg text-sm flex items-center justify-center space-x-2 shadow">
                     <i class="fa-solid fa-share-nodes text-lg"></i>
@@ -267,12 +267,14 @@
             firebase.initializeApp(firebaseConfig);
             db = firebase.database();
         } catch(e) {
-            console.log("Firebase 模式切換至區域相容模式");
+            console.log("Firebase 雲端連線備用模式");
         }
 
         let currentMode = 'commander';
         let currentShareUrl = '';
-        let lineToken = localStorage.getItem('line_channel_access_token') || '';
+        // 預設寫入內建 Token
+        const DEFAULT_TOKEN = 'Yfg3HAxAHkmSH4xU/p8y+fcDb4PLi/WQ+0mJgIit93uOsxWOltH8+Az1bmJwVB5ip5FWnhv/5YZfl8x6dF12/0sdhl0sG5p5Bf1wStjSDwZweuGwqI6jiZY/oBqXXUSyR2zwJTTvUg7OFSAvJlummQdB04t89/1O/w1cDnyilFU=';
+        let lineToken = localStorage.getItem('line_channel_access_token') || DEFAULT_TOKEN;
 
         window.addEventListener('DOMContentLoaded', () => {
             checkUrlParams();
@@ -313,7 +315,7 @@
 
         function loadLineTokenUI() {
             const tokenInput = document.getElementById('lineTokenInput');
-            if (tokenInput && lineToken) {
+            if (tokenInput) {
                 tokenInput.value = lineToken;
             }
         }
@@ -328,7 +330,7 @@
             const val = document.getElementById('lineTokenInput').value.trim();
             localStorage.setItem('line_channel_access_token', val);
             lineToken = val;
-            alert('✅ LINE Channel Access Token 已成功儲存！');
+            alert('✅ LINE Channel Access Token 已成功更新！');
             toggleSettingsModal(false);
         }
 
@@ -378,24 +380,30 @@
                 db.ref('latestDispatch').set({
                     commander, type, address, notes, timestamp: new Date().toLocaleTimeString()
                 });
-                // 清空先前的點名回應
                 db.ref('responses').remove();
             }
 
             document.getElementById('lineShareBox').classList.remove('hidden');
 
-            // 嘗試透過 LINE Messaging API 直接廣播
+            const dispatchBtn = document.getElementById('dispatchBtn');
+            dispatchBtn.disabled = true;
+            dispatchBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> 發送 LINE 官方廣播中...';
+
+            // 呼叫 LINE API 直發廣播
             const directSent = await sendDirectLineBroadcast(commander, type, address, notes, currentShareUrl);
 
+            dispatchBtn.disabled = false;
+            dispatchBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i><span>即刻發布派遣與 LINE 官方推播</span>';
+
             if (directSent) {
-                alert(`✅ 任務發布成功！\n發布指揮官：${commander}\n📲 已成功透過 LINE 官方帳號直接對全體好友發出廣播推播！`);
+                alert(`🚨 派遣通報已成功發布！\n發布指揮官：${commander}\n📲 系統已透過 LINE 官方帳號向全體義消發出彈窗警報！`);
             } else {
-                alert(`✅ 任務發布成功！\n發布指揮官：${commander}\n💡 請點擊下方「一鍵分享至 LINE 義消群組」按鈕進行傳送。`);
+                alert(`✅ 任務派遣已更新！\n發布指揮官：${commander}\n💡 請點擊下方綠色按鈕一鍵分享至 LINE 義消群組。`);
             }
         }
 
         async function sendDirectLineBroadcast(commander, type, address, notes, landingUrl) {
-            const token = lineToken || localStorage.getItem('line_channel_access_token');
+            const token = lineToken || DEFAULT_TOKEN;
             if (!token) return false;
 
             const payload = {
@@ -583,13 +591,3 @@
     </script>
 </body>
 </html>
-```
-
-已為您修正完畢！
-
-### 🛠️ 修正要點：
-1. **修復 SyntaxError 語法錯誤**：修正了 `checkUrlParams()` 的括號結構問題。
-2. **補充缺失函式**：補全了 `switchTab()` 視圖切換與 `selectType()` 災害類型選取邏輯。
-3. **語法完整性**：確保所有 JavaScript 邏輯皆完全閉合，並加入了串流載入標記。
-
-您可以直接 Commit 儲存至 GitHub，問題即可順利解決！
