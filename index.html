@@ -32,7 +32,7 @@
                 <h1 class="text-lg font-bold tracking-wide text-red-500">義消派遣點名系統</h1>
             </div>
             <div class="flex items-center space-x-2">
-                <button onclick="toggleSettingsModal(true)" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded-lg border border-slate-600 transition flex items-center" title="設定 LINE API">
+                <button onclick="toggleSettingsModal(true)" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded-lg border border-slate-600 transition flex items-center" title="設定參數與 Email 名單">
                     <i class="fa-solid fa-gear"></i>
                 </button>
                 <button onclick="switchTab()" id="modeToggleBtn" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-full border border-slate-600 transition flex items-center">
@@ -42,25 +42,38 @@
         </div>
     </header>
 
-    <!-- LINE API 設定彈窗 Modal -->
+    <!-- 系統設定彈窗 Modal (含 LINE API 與 Email 名單) -->
     <div id="settingsModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 max-w-sm w-full space-y-4 text-left shadow-2xl">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 max-w-sm w-full space-y-4 text-left shadow-2xl max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center border-b border-slate-700 pb-2">
                 <h3 class="font-bold text-slate-200 flex items-center">
-                    <i class="fa-solid fa-key text-yellow-400 mr-2"></i> LINE 官方帳號 API 設定
+                    <i class="fa-solid fa-sliders text-yellow-400 mr-2"></i> 系統參數與隊員名單設定
                 </h3>
                 <button onclick="toggleSettingsModal(false)" class="text-slate-400 hover:text-white">
                     <i class="fa-solid fa-xmark text-lg"></i>
                 </button>
             </div>
+
+            <!-- LINE Token 設定 -->
             <div>
-                <label class="block text-xs text-slate-400 mb-1">LINE Channel Access Token (長金鑰)</label>
-                <textarea id="lineTokenInput" rows="3" placeholder="貼上 LINE Channel Access Token..."
+                <label class="block text-xs font-bold text-slate-300 mb-1">LINE Channel Access Token</label>
+                <textarea id="lineTokenInput" rows="2" placeholder="貼上 LINE Channel Access Token..."
                     class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-200 focus:outline-none focus:border-red-500 font-mono"></textarea>
-                <p class="text-[11px] text-slate-400 mt-1">已成功預設內建金鑰！指揮官點擊發布時將**自動透過 LINE 官方帳號對所有好友發出彈窗廣播**！</p>
+                <p class="text-[11px] text-slate-400 mt-1">已內建預設 Token！發布時會同步發送 LINE 官方帳號廣播。</p>
             </div>
+
+            <!-- 隊員 Email 名單設定 -->
+            <div class="border-t border-slate-700 pt-3">
+                <label class="block text-xs font-bold text-slate-300 mb-1 flex items-center">
+                    <i class="fa-envelope text-blue-400 mr-1.5"></i> iPhone 隊員 Email 名單 (BCC 群發)
+                </label>
+                <textarea id="emailListInput" rows="4" placeholder="每行一個 Email，或用逗號分隔&#10;例如：&#10;member1@icloud.com&#10;member2@gmail.com"
+                    class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 font-mono leading-relaxed"></textarea>
+                <p class="text-[11px] text-slate-400 mt-1">用於觸發隊員 iPhone 的「郵件+捷徑」100% 強制爆音大響。發布時將自動以密件副本 (BCC) 發送。</p>
+            </div>
+
             <div class="flex space-x-2 pt-2">
-                <button onclick="saveLineToken()" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded-lg text-xs">儲存金鑰</button>
+                <button onclick="saveSystemSettings()" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded-lg text-xs">儲存設定</button>
                 <button onclick="toggleSettingsModal(false)" class="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 rounded-lg text-xs">取消</button>
             </div>
         </div>
@@ -76,7 +89,7 @@
                         <i class="fa-solid fa-tower-broadcast text-red-500 mr-2"></i> 發布派遣任務
                     </h2>
                     <span class="text-xs bg-emerald-950 text-emerald-400 border border-emerald-700 px-2 py-0.5 rounded-full">
-                        <i class="fa-solid fa-bolt mr-1"></i> LINE 官方連線中
+                        <i class="fa-solid fa-bolt mr-1"></i> 雙軌通報就緒
                     </span>
                 </div>
 
@@ -130,21 +143,39 @@
                     <!-- 發布按鈕 -->
                     <button type="submit" id="dispatchBtn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-lg shadow-lg shadow-red-900/40 transition flex items-center justify-center space-x-2 text-base">
                         <i class="fa-solid fa-paper-plane"></i>
-                        <span>即刻發布派遣與 LINE 官方推播</span>
+                        <span>即刻發布派遣與多軌廣播</span>
                     </button>
                 </form>
             </div>
 
-            <!-- 發布後的 LINE 備用轉傳區塊 -->
-            <div id="lineShareBox" class="hidden bg-emerald-950/80 border border-emerald-600 rounded-xl p-4 space-y-3">
-                <div class="flex items-center space-x-2 text-emerald-300 font-bold text-sm">
-                    <i class="fa-brands fa-line text-xl"></i>
-                    <span>派遣訊息已發送！如需轉發至私人群組：</span>
+            <!-- 發布後的兩大快捷廣播區塊 -->
+            <div id="dispatchSuccessBox" class="hidden space-y-3">
+                <!-- 1. Email 爆音廣播按鈕 (關鍵功能) -->
+                <div class="bg-blue-950/80 border border-blue-600 rounded-xl p-4 space-y-2">
+                    <div class="flex items-center space-x-2 text-blue-300 font-bold text-sm">
+                        <i class="fa-envelope text-xl"></i>
+                        <span>iPhone 強制爆音 Email 通報：</span>
+                    </div>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        點擊下方按鈕將自動開啟郵件，以密件副本 (BCC) 發給隊員，觸發隊員 iPhone 100% 大響！
+                    </p>
+                    <button onclick="triggerEmailDispatch()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg text-sm flex items-center justify-center space-x-2 shadow-lg">
+                        <i class="fa-solid fa-bullhorn text-lg"></i>
+                        <span>📧 點選一鍵發送 Email 爆音通報 (BCC 群發)</span>
+                    </button>
                 </div>
-                <button onclick="shareToLine()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg text-sm flex items-center justify-center space-x-2 shadow">
-                    <i class="fa-solid fa-share-nodes text-lg"></i>
-                    <span>📱 點選一鍵分享至 LINE 義消群組</span>
-                </button>
+
+                <!-- 2. LINE 群組轉發 -->
+                <div class="bg-emerald-950/80 border border-emerald-600 rounded-xl p-4 space-y-2">
+                    <div class="flex items-center space-x-2 text-emerald-300 font-bold text-sm">
+                        <i class="fa-brands fa-line text-xl"></i>
+                        <span>一鍵轉發至 LINE 私人群組：</span>
+                    </div>
+                    <button onclick="shareToLine()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg text-sm flex items-center justify-center space-x-2 shadow">
+                        <i class="fa-solid fa-share-nodes text-lg"></i>
+                        <span>📱 分享至 LINE 義消群組</span>
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -257,7 +288,7 @@
             "4444": "小隊長 - 蕭勝文"
         };
 
-        // 免費用戶 Firebase 即時雲端庫
+        // 免費 Firebase 即時雲端庫
         const firebaseConfig = {
             databaseURL: "https://fire-dispatch-default-rtdb.asia-southeast1.firebasedatabase.app"
         };
@@ -272,15 +303,17 @@
 
         let currentMode = 'commander';
         let currentShareUrl = '';
-        // 預設寫入內建 Token
+        
+        // 預設內建 Token 與 預設隊員 Email 範例
         const DEFAULT_TOKEN = 'Yfg3HAxAHkmSH4xU/p8y+fcDb4PLi/WQ+0mJgIit93uOsxWOltH8+Az1bmJwVB5ip5FWnhv/5YZfl8x6dF12/0sdhl0sG5p5Bf1wStjSDwZweuGwqI6jiZY/oBqXXUSyR2zwJTTvUg7OFSAvJlummQdB04t89/1O/w1cDnyilFU=';
         let lineToken = localStorage.getItem('line_channel_access_token') || DEFAULT_TOKEN;
+        let emailList = localStorage.getItem('team_email_list') || 'member1@icloud.com, member2@gmail.com';
 
         window.addEventListener('DOMContentLoaded', () => {
             checkUrlParams();
             loadVolunteerName();
             listenRealtimeResponses();
-            loadLineTokenUI();
+            loadSystemSettingsUI();
         });
 
         function switchTab() {
@@ -313,11 +346,11 @@
             });
         }
 
-        function loadLineTokenUI() {
+        function loadSystemSettingsUI() {
             const tokenInput = document.getElementById('lineTokenInput');
-            if (tokenInput) {
-                tokenInput.value = lineToken;
-            }
+            const emailInput = document.getElementById('emailListInput');
+            if (tokenInput) tokenInput.value = lineToken;
+            if (emailInput) emailInput.value = emailList;
         }
 
         function toggleSettingsModal(show) {
@@ -326,11 +359,17 @@
             else modal.classList.add('hidden');
         }
 
-        function saveLineToken() {
-            const val = document.getElementById('lineTokenInput').value.trim();
-            localStorage.setItem('line_channel_access_token', val);
-            lineToken = val;
-            alert('✅ LINE Channel Access Token 已成功更新！');
+        function saveSystemSettings() {
+            const tokenVal = document.getElementById('lineTokenInput').value.trim();
+            const emailVal = document.getElementById('emailListInput').value.trim();
+
+            localStorage.setItem('line_channel_access_token', tokenVal);
+            localStorage.setItem('team_email_list', emailVal);
+
+            lineToken = tokenVal;
+            emailList = emailVal;
+
+            alert('✅ 系統參數與 Email 隊員名單已成功儲存！');
             toggleSettingsModal(false);
         }
 
@@ -383,7 +422,8 @@
                 db.ref('responses').remove();
             }
 
-            document.getElementById('lineShareBox').classList.remove('hidden');
+            // 顯示兩大快速群發按鈕區塊
+            document.getElementById('dispatchSuccessBox').classList.remove('hidden');
 
             const dispatchBtn = document.getElementById('dispatchBtn');
             dispatchBtn.disabled = true;
@@ -393,12 +433,12 @@
             const directSent = await sendDirectLineBroadcast(commander, type, address, notes, currentShareUrl);
 
             dispatchBtn.disabled = false;
-            dispatchBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i><span>即刻發布派遣與 LINE 官方推播</span>';
+            dispatchBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i><span>即刻發布派遣與多軌廣播</span>';
 
             if (directSent) {
-                alert(`🚨 派遣通報已成功發布！\n發布指揮官：${commander}\n📲 系統已透過 LINE 官方帳號向全體義消發出彈窗警報！`);
+                alert(`🚨 派遣任務已發布！\n發布指揮官：${commander}\n\n1. LINE 官方帳號彈窗警報：已成功發送！\n2. 請點擊下方藍色按鈕「一鍵發送 Email 爆音通報」喚醒全體 iPhone 隊員！`);
             } else {
-                alert(`✅ 任務派遣已更新！\n發布指揮官：${commander}\n💡 請點擊下方綠色按鈕一鍵分享至 LINE 義消群組。`);
+                alert(`✅ 派遣任務已儲存！\n發布指揮官：${commander}\n\n請利用下方藍色與綠色按鈕觸發 Email 爆音與 LINE 群組轉發。`);
             }
         }
 
@@ -454,6 +494,32 @@
                 console.error('LINE Direct Broadcast Error:', err);
                 return false;
             }
+        }
+
+        // 📧 觸發 Email BCC 爆音通報 (觸發 iPhone 捷徑關鍵)
+        function triggerEmailDispatch() {
+            const addr = document.getElementById('addressInput').value;
+            const type = document.getElementById('selectedType').value;
+            const notes = document.getElementById('notesInput').value;
+
+            // 整理格式化 Email 名單 (以逗號分隔)
+            let rawList = localStorage.getItem('team_email_list') || '';
+            let formattedBcc = rawList.split(/[\n,]+/).map(e => e.trim()).filter(e => e.length > 0).join(',');
+
+            if (!formattedBcc) {
+                alert('⚠️ 尚未設定隊員 Email 名單！請先至右上角 ⚙️ 設定中新增隊員的 Email。');
+                toggleSettingsModal(true);
+                return;
+            }
+
+            // 主旨必須包含 🚨 以觸發隊員 iPhone 捷徑自動化
+            const subject = `🚨【義消緊急召集】${type} - ${addr}`;
+            const body = `🚨【義消緊急召集派遣通報】\n\n📌 任務類型：${type}\n📍 救援地點：${addr}\n📝 現場說明：${notes}\n\n🔊 請點擊以下連結聽取語音導航與回覆出勤：\n${currentShareUrl}`;
+
+            const mailtoUrl = `mailto:?bcc=${encodeURIComponent(formattedBcc)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            
+            // 自動開啟手機郵件 App
+            window.location.href = mailtoUrl;
         }
 
         function shareToLine() {
