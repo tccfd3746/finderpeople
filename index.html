@@ -34,6 +34,17 @@
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased pb-12 select-none">
+
+    <!-- 頂部導覽列 -->
+    <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50 shadow-md">
+        <div class="max-w-md mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <span class="text-2xl">🚨</span>
+                <h1 class="text-lg font-bold tracking-wide text-red-500">義消派遣點名系統</h1>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button onclick="toggleSettingsModal(true)" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded-lg border border-slate-600 transition flex items-center" title="設定參數與隊員名單">
+                    <i class="fa-solid fa-gear"></i>
                 </button>
                 <button onclick="switchTab()" id="modeToggleBtn" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-full border border-slate-600 transition flex items-center">
                     <i class="fa-solid fa-eye mr-1.5"></i> 預覽義消視圖
@@ -447,6 +458,12 @@
             });
         }
 
+        function toggleSettingsModal(show) {
+            const modal = document.getElementById('settingsModal');
+            if (show) modal.classList.remove('hidden');
+            else modal.classList.add('hidden');
+        }
+
         function loadSystemSettingsUI() {
             const tokenInput = document.getElementById('lineTokenInput');
             const emailInput = document.getElementById('emailListInput');
@@ -542,6 +559,29 @@
             }
         }
 
+        function checkUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const addr = urlParams.get('addr');
+            const type = urlParams.get('type');
+            const commander = urlParams.get('commander');
+            const notes = urlParams.get('notes');
+
+            if (addr || type || commander) {
+                currentMode = 'volunteer';
+                document.getElementById('commanderView').classList.add('hidden');
+                document.getElementById('volunteerView').classList.remove('hidden');
+                document.getElementById('modeToggleBtn').innerHTML = '<i class="fa-solid fa-tower-broadcast mr-1.5"></i> 切換指揮官視圖';
+
+                if (type) document.getElementById('displayType').innerText = type;
+                if (commander) document.getElementById('displayCommander').innerText = '指揮官：' + commander;
+                if (addr) {
+                    document.getElementById('displayAddress').innerText = addr;
+                    document.getElementById('navBtn').href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`;
+                }
+                if (notes) document.getElementById('displayNotes').innerText = notes;
+            }
+        }
+
         async function handleDispatch(e) {
             e.preventDefault();
             const pin = document.getElementById('pinInput').value;
@@ -607,6 +647,8 @@
             dispatchBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i><span>即刻發布派遣與多軌廣播</span>';
 
             alert(`🚨 派遣任務發布完畢！\n發布指揮官：${commander}\n\n1. Bark 0延遲爆音：${barkSent ? '成功發送' : '未設定'}\n2. LINE 官方廣播：${directLineSent ? '成功' : '未完成'}\n3. 背景爆音信件：${backgroundEmailSent ? '成功發送' : '未設定'}`);
+        }
+
         // 🍎 Bark API 背景 0 延遲 + 持續響鈴 (call=1) 直推功能
         async function sendBarkPushNotifications(commander, type, address, notes, landingUrl) {
             const rawList = barkList || localStorage.getItem('team_bark_list') || '';
@@ -791,7 +833,7 @@
             const item = { name, status, time: timeStr, timestamp: Date.now() };
 
             if (db) {
-                // 帶入寫入回调，確保數據 100% 寫入雲端或啟動備援
+                // 帶入寫入回調，確保數據 100% 寫入雲端或啟動備援
                 db.ref('responses').push(item, (error) => {
                     if (error) {
                         console.error('Firebase 雲端寫入失敗:', error);
